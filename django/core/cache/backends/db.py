@@ -25,7 +25,7 @@ class Options(object):
         self.managed = True
         self.proxy = False
 
-class BaseDatabaseCache(BaseCache):
+class BaseDatabaseCacheClass(BaseCache):
     def __init__(self, table, params):
         BaseCache.__init__(self, params)
         self._table = table
@@ -34,9 +34,8 @@ class BaseDatabaseCache(BaseCache):
             _meta = Options(table)
         self.cache_model_class = CacheEntry
 
-class DatabaseCache(BaseDatabaseCache):
-    def get(self, key, default=None, version=None):
-        key = self.make_key(key, version=version)
+class CacheClass(BaseDatabaseCacheClass):
+    def get(self, key, default=None):
         self.validate_key(key)
         db = router.db_for_read(self.cache_model_class)
         table = connections[db].ops.quote_name(self._table)
@@ -56,13 +55,11 @@ class DatabaseCache(BaseDatabaseCache):
         value = connections[db].ops.process_clob(row[1])
         return pickle.loads(base64.decodestring(value))
 
-    def set(self, key, value, timeout=None, version=None):
-        key = self.make_key(key, version=version)
+    def set(self, key, value, timeout=None):
         self.validate_key(key)
         self._base_set('set', key, value, timeout)
 
-    def add(self, key, value, timeout=None, version=None):
-        key = self.make_key(key, version=version)
+    def add(self, key, value, timeout=None):
         self.validate_key(key)
         return self._base_set('add', key, value, timeout)
 
@@ -98,10 +95,8 @@ class DatabaseCache(BaseDatabaseCache):
             transaction.commit_unless_managed(using=db)
             return True
 
-    def delete(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def delete(self, key):
         self.validate_key(key)
-
         db = router.db_for_write(self.cache_model_class)
         table = connections[db].ops.quote_name(self._table)
         cursor = connections[db].cursor()
@@ -109,10 +104,8 @@ class DatabaseCache(BaseDatabaseCache):
         cursor.execute("DELETE FROM %s WHERE cache_key = %%s" % table, [key])
         transaction.commit_unless_managed(using=db)
 
-    def has_key(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def has_key(self, key):
         self.validate_key(key)
-
         db = router.db_for_read(self.cache_model_class)
         table = connections[db].ops.quote_name(self._table)
         cursor = connections[db].cursor()
@@ -140,7 +133,3 @@ class DatabaseCache(BaseDatabaseCache):
         table = connections[db].ops.quote_name(self._table)
         cursor = connections[db].cursor()
         cursor.execute('DELETE FROM %s' % table)
-
-# For backwards compatibility
-class CacheClass(DatabaseCache):
-    pass

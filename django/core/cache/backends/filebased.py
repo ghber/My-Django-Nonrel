@@ -11,24 +11,23 @@ except ImportError:
 from django.core.cache.backends.base import BaseCache
 from django.utils.hashcompat import md5_constructor
 
-class FileBasedCache(BaseCache):
+class CacheClass(BaseCache):
     def __init__(self, dir, params):
         BaseCache.__init__(self, params)
         self._dir = dir
         if not os.path.exists(self._dir):
             self._createdir()
 
-    def add(self, key, value, timeout=None, version=None):
-        if self.has_key(key, version=version):
+    def add(self, key, value, timeout=None):
+        self.validate_key(key)
+        if self.has_key(key):
             return False
 
-        self.set(key, value, timeout, version=version)
+        self.set(key, value, timeout)
         return True
 
-    def get(self, key, default=None, version=None):
-        key = self.make_key(key, version=version)
+    def get(self, key, default=None):
         self.validate_key(key)
-
         fname = self._key_to_file(key)
         try:
             f = open(fname, 'rb')
@@ -45,10 +44,8 @@ class FileBasedCache(BaseCache):
             pass
         return default
 
-    def set(self, key, value, timeout=None, version=None):
-        key = self.make_key(key, version=version)
+    def set(self, key, value, timeout=None):
         self.validate_key(key)
-
         fname = self._key_to_file(key)
         dirname = os.path.dirname(fname)
 
@@ -71,8 +68,7 @@ class FileBasedCache(BaseCache):
         except (IOError, OSError):
             pass
 
-    def delete(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def delete(self, key):
         self.validate_key(key)
         try:
             self._delete(self._key_to_file(key))
@@ -89,8 +85,7 @@ class FileBasedCache(BaseCache):
         except (IOError, OSError):
             pass
 
-    def has_key(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def has_key(self, key):
         self.validate_key(key)
         fname = self._key_to_file(key)
         try:
@@ -145,7 +140,7 @@ class FileBasedCache(BaseCache):
         Thus, a cache key of "foo" gets turnned into a file named
         ``{cache-dir}ac/bd/18db4cc2f85cedef654fccc4a4d8``.
         """
-        path = md5_constructor(key).hexdigest()
+        path = md5_constructor(key.encode('utf-8')).hexdigest()
         path = os.path.join(path[:2], path[2:4], path[4:])
         return os.path.join(self._dir, path)
 
@@ -161,7 +156,3 @@ class FileBasedCache(BaseCache):
             shutil.rmtree(self._dir)
         except (IOError, OSError):
             pass
-
-# For backwards compatibility
-class CacheClass(FileBasedCache):
-    pass

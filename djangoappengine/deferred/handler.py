@@ -1,22 +1,13 @@
+import os, sys
+
+parent_dir = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
 # Initialize Django
-from djangoappengine.main.main import make_profileable
+from djangoappengine.main import main as gaemain
 
-from django.utils.importlib import import_module
-from django.conf import settings
-
-# load all models.py to ensure signal handling installation or index loading
-# of some apps 
-for app in settings.INSTALLED_APPS:
-    try:
-        import_module('%s.models' % (app))
-        import logging
-        logging.debug(app)
-    except ImportError:
-        pass
-
+# Import and run the actual handler
 from google.appengine.ext.deferred.handler import main
-
-main = make_profileable(main)
-
 if __name__ == '__main__':
     main()

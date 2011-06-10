@@ -19,7 +19,7 @@ for path in sys.path[:]:
 # Remove the standard version of Django.
 if 'django' in sys.modules and sys.modules['django'].VERSION < (1, 2):
     for k in [k for k in sys.modules
-              if k.startswith('django.') or k == 'django']:
+              if k.startswith('django\.') or k == 'django']:
         del sys.modules[k]
 
 from djangoappengine.boot import setup_env, setup_logging, env_ext
@@ -46,34 +46,25 @@ def real_main():
     os.environ.update(env_ext)
     setup_logging()
 
-    # Create a Django application for WSGI
+    # Create a Django application for WSGI.
     application = WSGIHandler()
-
-    # Add the staticfiles handler if necessary
-    if settings.DEBUG and 'django.contrib.staticfiles' in settings.INSTALLED_APPS:
-        from django.contrib.staticfiles.handlers import StaticFilesHandler
-        application = StaticFilesHandler(application)
 
     # Run the WSGI CGI handler with that application.
     run_wsgi_app(application)
 
-def profile_main(func):
-    from cStringIO import StringIO
-    import cProfile
-    import logging
-    import pstats
-    import random
+def profile_main():
+    import logging, cProfile, pstats, random, StringIO
     only_forced_profile = getattr(settings, 'ONLY_FORCED_PROFILE', False)
     profile_percentage = getattr(settings, 'PROFILE_PERCENTAGE', None)
     if (only_forced_profile and
                 'profile=forced' not in os.environ.get('QUERY_STRING')) or \
             (not only_forced_profile and profile_percentage and
                 float(profile_percentage) / 100.0 <= random.random()):
-        return func()
+        return real_main()
 
     prof = cProfile.Profile()
-    prof = prof.runctx('func()', globals(), locals())
-    stream = StringIO()
+    prof = prof.runctx('real_main()', globals(), locals())
+    stream = StringIO.StringIO()
     stats = pstats.Stats(prof, stream=stream)
     sort_by = getattr(settings, 'SORT_PROFILE_RESULTS_BY', 'time')
     if not isinstance(sort_by, (list, tuple)):
@@ -97,12 +88,7 @@ def profile_main(func):
         stats.print_callers()
     logging.info('Profile data:\n%s', stream.getvalue())
 
-def make_profileable(func):
-    if getattr(settings, 'ENABLE_PROFILER', False):
-        return lambda: profile_main(func)
-    return func
-
-main = make_profileable(real_main)
+main = getattr(settings, 'ENABLE_PROFILER', False) and profile_main or real_main
 
 if __name__ == '__main__':
     main()

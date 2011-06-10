@@ -8,11 +8,8 @@ class Command(BaseCommand):
 
     def run_from_argv(self, argv):
         from django.db import connections
-        from ...db.base import DatabaseWrapper
-        from ...db.stubs import stub_manager
         for connection in connections.all():
-            if isinstance(connection, DatabaseWrapper):
-                stub_manager.setup_remote_stubs(connection)
-                break
+            if hasattr(connection, 'setup_remote'):
+                connection.setup_remote()
         argv = argv[:1] + argv[2:]
         execute_from_command_line(argv)

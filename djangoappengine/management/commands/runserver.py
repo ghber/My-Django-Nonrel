@@ -1,9 +1,26 @@
+#!/usr/bin/python2.4
+#
+# Copyright 2008 Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 import logging
+import os
 import sys
 
 from django.db import connections
-from ...boot import PROJECT_DIR
-from ...db.base import DatabaseWrapper, get_datastore_paths
+from ...db.base import DatabaseWrapper
 from django.core.management.base import BaseCommand
 from django.core.exceptions import ImproperlyConfigured
 
@@ -47,21 +64,20 @@ def start_dev_appserver(argv):
     for name in connections:
         connection = connections[name]
         if isinstance(connection, DatabaseWrapper):
-            for key, path in get_datastore_paths(connection.settings_dict).items():
-                # XXX/TODO: Remove this when SDK 1.4.3 is released
-                if key == 'prospective_search_path':
-                    continue
-
-                arg = '--' + key
-                if arg not in args:
-                    args.extend([arg, path])
+            p = connection._get_paths()
+            if '--datastore_path' not in args:
+                args.extend(['--datastore_path', p[0]])
+            if '--blobstore_path' not in args:
+                args.extend(['--blobstore_path', p[1]])
+            if '--history_path' not in args:
+                args.extend(['--history_path', p[2]])
             break
 
     # Reset logging level to INFO as dev_appserver will spew tons of debug logs
     logging.getLogger().setLevel(logging.INFO)
 
     # Append the current working directory to the arguments.
-    dev_appserver_main.main([progname] + args + [PROJECT_DIR])
+    dev_appserver_main.main([progname] + args + [os.getcwdu()])
 
 class Command(BaseCommand):
     """Overrides the default Django runserver command.

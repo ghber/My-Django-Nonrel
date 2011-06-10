@@ -6,7 +6,6 @@ from django.utils.translation import get_language, to_locale, check_for_language
 from django.utils.importlib import import_module
 from django.utils.encoding import smart_str
 from django.utils import dateformat, numberformat, datetime_safe
-from django.utils.safestring import mark_safe
 
 # format_cache is a mapping from (format_type, lang) to the format string.
 # By using the cache, it is possible to avoid running get_format_modules
@@ -14,29 +13,17 @@ from django.utils.safestring import mark_safe
 _format_cache = {}
 _format_modules_cache = {}
 
-def reset_format_cache():
-    """Clear any cached formats.
-
-    This method is provided primarily for testing purposes,
-    so that the effects of cached formats can be removed.
-    """
-    global _format_cache, _format_modules_cache
-    _format_cache = {}
-    _format_modules_cache = {}
-
 def iter_format_modules(lang):
     """
     Does the heavy lifting of finding format modules.
     """
-    if check_for_language(lang):
+    if check_for_language(lang) or settings.USE_L10N:
         format_locations = ['django.conf.locale.%s']
         if settings.FORMAT_MODULE_PATH:
             format_locations.append(settings.FORMAT_MODULE_PATH + '.%s')
             format_locations.reverse()
         locale = to_locale(lang)
-        locales = [locale]
-        if '_' in locale:
-            locales.append(locale.split('_')[0])
+        locales = set((locale, locale.split('_')[0]))
         for location in format_locations:
             for loc in locales:
                 try:
@@ -46,12 +33,12 @@ def iter_format_modules(lang):
 
 def get_format_modules(reverse=False):
     """
-    Returns a list of the format modules found
+    Returns an iterator over the format modules found
     """
     lang = get_language()
     modules = _format_modules_cache.setdefault(lang, list(iter_format_modules(lang)))
     if reverse:
-        return list(reversed(modules))
+        modules.reverse()
     return modules
 
 def get_format(format_type, lang=None, use_l10n=None):
@@ -127,9 +114,7 @@ def localize(value, use_l10n=None):
     If use_l10n is provided and is not None, that will force the value to
     be localized (or not), overriding the value of settings.USE_L10N.
     """
-    if isinstance(value, bool):
-        return mark_safe(unicode(value))
-    elif isinstance(value, (decimal.Decimal, float, int, long)):
+    if isinstance(value, (decimal.Decimal, float, int, long)):
         return number_format(value, use_l10n=use_l10n)
     elif isinstance(value, datetime.datetime):
         return date_format(value, 'DATETIME_FORMAT', use_l10n=use_l10n)

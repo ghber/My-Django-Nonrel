@@ -9,22 +9,14 @@ except ImportError:
 from django.core.cache.backends.base import BaseCache
 from django.utils.synch import RWLock
 
-# Global in-memory store of cache data. Keyed by name, to provide
-# multiple named local memory caches.
-_caches = {}
-_expire_info = {}
-_locks = {}
-
-class LocMemCache(BaseCache):
-    def __init__(self, name, params):
+class CacheClass(BaseCache):
+    def __init__(self, _, params):
         BaseCache.__init__(self, params)
-        global _caches, _expire_info, _locks
-        self._cache = _caches.setdefault(name, {})
-        self._expire_info = _expire_info.setdefault(name, {})
-        self._lock = _locks.setdefault(name, RWLock())
+        self._cache = {}
+        self._expire_info = {}
+        self._lock = RWLock()
 
-    def add(self, key, value, timeout=None, version=None):
-        key = self.make_key(key, version=version)
+    def add(self, key, value, timeout=None):
         self.validate_key(key)
         self._lock.writer_enters()
         try:
@@ -39,8 +31,7 @@ class LocMemCache(BaseCache):
         finally:
             self._lock.writer_leaves()
 
-    def get(self, key, default=None, version=None):
-        key = self.make_key(key, version=version)
+    def get(self, key, default=None):
         self.validate_key(key)
         self._lock.reader_enters()
         try:
@@ -73,8 +64,7 @@ class LocMemCache(BaseCache):
         self._cache[key] = value
         self._expire_info[key] = time.time() + timeout
 
-    def set(self, key, value, timeout=None, version=None):
-        key = self.make_key(key, version=version)
+    def set(self, key, value, timeout=None):
         self.validate_key(key)
         self._lock.writer_enters()
         # Python 2.4 doesn't allow combined try-except-finally blocks.
@@ -86,8 +76,7 @@ class LocMemCache(BaseCache):
         finally:
             self._lock.writer_leaves()
 
-    def has_key(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def has_key(self, key):
         self.validate_key(key)
         self._lock.reader_enters()
         try:
@@ -128,8 +117,7 @@ class LocMemCache(BaseCache):
         except KeyError:
             pass
 
-    def delete(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def delete(self, key):
         self.validate_key(key)
         self._lock.writer_enters()
         try:
@@ -140,7 +128,3 @@ class LocMemCache(BaseCache):
     def clear(self):
         self._cache.clear()
         self._expire_info.clear()
-
-# For backwards compatibility
-class CacheClass(LocMemCache):
-    pass

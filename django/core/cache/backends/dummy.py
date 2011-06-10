@@ -2,45 +2,36 @@
 
 from django.core.cache.backends.base import BaseCache
 
-class DummyCache(BaseCache):
-    def __init__(self, host, *args, **kwargs):
-        BaseCache.__init__(self, *args, **kwargs)
+class CacheClass(BaseCache):
+    def __init__(self, *args, **kwargs):
+        pass
 
-    def add(self, key, value, timeout=None, version=None):
-        key = self.make_key(key, version=version)
+    def add(self, key, *args, **kwargs):
         self.validate_key(key)
         return True
 
-    def get(self, key, default=None, version=None):
-        key = self.make_key(key, version=version)
+    def get(self, key, default=None):
         self.validate_key(key)
         return default
 
-    def set(self, key, value, timeout=None, version=None):
-        key = self.make_key(key, version=version)
+    def set(self, key, *args, **kwargs):
         self.validate_key(key)
 
-    def delete(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def delete(self, key, *args, **kwargs):
         self.validate_key(key)
 
-    def get_many(self, keys, version=None):
+    def get_many(self, *args, **kwargs):
         return {}
 
-    def has_key(self, key, version=None):
-        key = self.make_key(key, version=version)
+    def has_key(self, key, *args, **kwargs):
         self.validate_key(key)
         return False
 
-    def set_many(self, data, version=None):
+    def set_many(self, *args, **kwargs):
         pass
 
-    def delete_many(self, keys, version=None):
+    def delete_many(self, *args, **kwargs):
         pass
 
     def clear(self):
         pass
-
-# For backwards compatibility
-class CacheClass(DummyCache):
-    pass

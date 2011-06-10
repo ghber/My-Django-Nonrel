@@ -12,9 +12,7 @@ class NonrelDatabaseFeatures(BaseDatabaseFeatures):
     supports_date_lookup_using_string = False
     supports_timezones = False
 
-    supports_joins = False
     distinguishes_insert_from_update = False
-    supports_select_related = False
     supports_deleting_related_objects = False
     string_based_auto_field = False
     supports_dicts = False
@@ -57,9 +55,6 @@ class NonrelDatabaseOperations(BaseDatabaseOperations):
     def year_lookup_bounds(self, value):
         return [datetime.datetime(value, 1, 1, 0, 0, 0, 0),
                 datetime.datetime(value+1, 1, 1, 0, 0, 0, 0)]
-
-    def pk_default_value(self):
-        return None
 
     def value_to_db_auto(self, value):
         """

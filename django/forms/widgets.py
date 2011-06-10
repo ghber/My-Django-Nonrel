@@ -1,13 +1,9 @@
 """
 HTML Widget classes
 """
-import datetime
-from itertools import chain
-import time
-from urlparse import urljoin
-from util import flatatt
 
 import django.utils.copycompat as copy
+from itertools import chain
 from django.conf import settings
 from django.utils.datastructures import MultiValueDict, MergeDict
 from django.utils.html import escape, conditional_escape
@@ -15,6 +11,10 @@ from django.utils.translation import ugettext, ugettext_lazy
 from django.utils.encoding import StrAndUnicode, force_unicode
 from django.utils.safestring import mark_safe
 from django.utils import datetime_safe, formats
+import time
+import datetime
+from util import flatatt
+from urlparse import urljoin
 
 __all__ = (
     'Media', 'MediaDefiningClass', 'Widget', 'TextInput', 'PasswordInput',
@@ -63,16 +63,10 @@ class Media(StrAndUnicode):
                     for path in self._css[medium]]
                 for medium in media])
 
-    def absolute_path(self, path, prefix=None):
+    def absolute_path(self, path):
         if path.startswith(u'http://') or path.startswith(u'https://') or path.startswith(u'/'):
             return path
-        if prefix is None:
-            if settings.STATIC_URL is None:
-                 # backwards compatibility
-                prefix = settings.MEDIA_URL
-            else:
-                prefix = settings.STATIC_URL
-        return urljoin(prefix, path)
+        return urljoin(settings.MEDIA_URL,path)
 
     def __getitem__(self, name):
         "Returns a Media object that only contains media of the given type"
@@ -329,14 +323,13 @@ class ClearableFileInput(FileInput):
 
         if value and hasattr(value, "url"):
             template = self.template_with_initial
-            substitutions['initial'] = (u'<a href="%s">%s</a>'
-                                        % (escape(value.url),
-                                           escape(force_unicode(value))))
+            substitutions['initial'] = (u'<a target="_blank" href="%s">%s</a>'
+                                        % (value.url, value))
             if not self.is_required:
                 checkbox_name = self.clear_checkbox_name(name)
                 checkbox_id = self.clear_checkbox_id(checkbox_name)
-                substitutions['clear_checkbox_name'] = conditional_escape(checkbox_name)
-                substitutions['clear_checkbox_id'] = conditional_escape(checkbox_id)
+                substitutions['clear_checkbox_name'] = checkbox_name
+                substitutions['clear_checkbox_id'] = checkbox_id
                 substitutions['clear'] = CheckboxInput().render(checkbox_name, False, attrs={'id': checkbox_id})
                 substitutions['clear_template'] = self.template_with_clear % substitutions
 
@@ -596,9 +589,10 @@ class SelectMultiple(Select):
             data = []
         if len(initial) != len(data):
             return True
-        initial_set = set([force_unicode(value) for value in initial])
-        data_set = set([force_unicode(value) for value in data])
-        return data_set != initial_set
+        for value1, value2 in zip(initial, data):
+            if force_unicode(value1) != force_unicode(value2):
+                return True
+        return False
 
 class RadioInput(StrAndUnicode):
     """

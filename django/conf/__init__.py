@@ -9,7 +9,6 @@ a list of all possible variables.
 import os
 import re
 import time     # Needed for Windows
-import warnings
 
 from django.conf import global_settings
 from django.utils.functional import LazyObject
@@ -61,19 +60,7 @@ class LazySettings(LazyObject):
         return bool(self._wrapped)
     configured = property(configured)
 
-
-class BaseSettings(object):
-    """
-    Common logic for settings whether set by a module or by the user.
-    """
-    def __setattr__(self, name, value):
-        if name in ("MEDIA_URL", "STATIC_URL") and value and not value.endswith('/'):
-            warnings.warn('If set, %s must end with a slash' % name,
-                          PendingDeprecationWarning)
-        object.__setattr__(self, name, value)
-
-
-class Settings(BaseSettings):
+class Settings(object):
     def __init__(self, settings_module):
         # update this dict from global settings (but only for ALL_CAPS settings)
         for setting in dir(global_settings):
@@ -86,7 +73,7 @@ class Settings(BaseSettings):
         try:
             mod = importlib.import_module(self.SETTINGS_MODULE)
         except ImportError, e:
-            raise ImportError("Could not import settings '%s' (Is it on sys.path?): %s" % (self.SETTINGS_MODULE, e))
+            raise ImportError("Could not import settings '%s' (Is it on sys.path? Does it have syntax errors?): %s" % (self.SETTINGS_MODULE, e))
 
         # Settings that should be converted into tuples if they're mistakenly entered
         # as strings.
@@ -138,8 +125,7 @@ class Settings(BaseSettings):
             # ... then invoke it with the logging settings
             logging_config_func(self.LOGGING)
 
-
-class UserSettingsHolder(BaseSettings):
+class UserSettingsHolder(object):
     """
     Holder for user configured settings.
     """

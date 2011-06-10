@@ -1,4 +1,4 @@
-application: my-django-nonrel
+application: ctst
 version: 1
 runtime: python
 api_version: 1

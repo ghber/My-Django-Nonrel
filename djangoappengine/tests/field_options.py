@@ -27,7 +27,7 @@ class FieldOptionsTest(TestCase):
             entity.pk))
         self.assertTrue(gae_entity is not None)
         self.assertEquals(gae_entity.key().name(), u'app-engine@scholardocs.com')
-
+        
         # check if default values are set correctly on the db level,
         # primary_key field is not stored at the db level
         for field in FieldsWithOptionsModel._meta.local_fields:
@@ -77,3 +77,4 @@ class FieldOptionsTest(TestCase):
         # TODO: check db_column option
         # TODO: change the primary key and check if a new instance with the
         # changed primary key will be saved (not in this test class)
+        

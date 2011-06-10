@@ -1,28 +1,11 @@
 from .fields import ListField, SetField, DictField, EmbeddedModelField
 from django.db import models, connections
 from django.db.models import Q
-from django.db.models.signals import post_save
 from django.db.utils import DatabaseError
-from django.dispatch.dispatcher import receiver
 from django.test import TestCase
 from django.utils import unittest
 
-def count_calls(func):
-    def wrapper(*args, **kwargs):
-        wrapper.calls += 1
-        return func(*args, **kwargs)
-    wrapper.calls = 0
-    return wrapper
-
-class Target(models.Model):
-    index = models.IntegerField()
-
-class Source(models.Model):
-    target = models.ForeignKey(Target)
-    index = models.IntegerField()
-
 class ListModel(models.Model):
-    integer = models.IntegerField(primary_key=True)
     floating_point = models.FloatField()
     names = ListField(models.CharField(max_length=500))
     names_with_default = ListField(models.CharField(max_length=500), default=[])
@@ -30,7 +13,7 @@ class ListModel(models.Model):
 
 class OrderedListModel(models.Model):
     ordered_ints = ListField(models.IntegerField(max_length=500), default=[],
-                             ordering=count_calls(lambda x:x), null=True)
+                             ordering=lambda x: x, null=True)
     ordered_nullable = ListField(ordering=lambda x:x, null=True)
 
 class SetModel(models.Model):
@@ -43,19 +26,16 @@ if supports_dicts:
         dictfield_nullable = DictField(null=True)
         auto_now = DictField(models.DateTimeField(auto_now=True))
 
-    class EmbeddedModelFieldModel(models.Model):
-        simple = EmbeddedModelField('EmbeddedModel', null=True)
-        simple_untyped = EmbeddedModelField(null=True)
-        typed_list = ListField(EmbeddedModelField('SetModel'))
-        untyped_list = ListField(EmbeddedModelField())
-        untyped_dict = DictField(EmbeddedModelField())
-        ordered_list = ListField(EmbeddedModelField(), ordering=lambda obj: obj.index)
-
     class EmbeddedModel(models.Model):
-        some_relation = models.ForeignKey(DictModel, null=True)
         someint = models.IntegerField()
         auto_now = models.DateTimeField(auto_now=True)
         auto_now_add = models.DateTimeField(auto_now_add=True)
+
+    class EmbeddedModelFieldModel(models.Model):
+        simple = EmbeddedModelField(EmbeddedModel, null=True)
+        typed_list = ListField(EmbeddedModelField(SetModel))
+        untyped_list = ListField(EmbeddedModelField())
+        untyped_dict = DictField(EmbeddedModelField())
 
 class FilterTest(TestCase):
     floats = [5.3, 2.6, 9.1, 1.58]
@@ -64,13 +44,13 @@ class FilterTest(TestCase):
 
     def setUp(self):
         for i, float in enumerate(FilterTest.floats):
-            ListModel(integer=i+1, floating_point=float, names=FilterTest.names[:i+1]).save()
+            ListModel(floating_point=float, names=FilterTest.names[:i+1]).save()
 
     def test_startswith(self):
-        self.assertEquals(dict([(entity.pk, entity.names) for entity in
-                           ListModel.objects.filter(names__startswith='Sa')]),
-                          dict([(3, ['Kakashi', 'Naruto', 'Sasuke',]),
-                            (4, ['Kakashi', 'Naruto', 'Sasuke', 'Sakura',]), ]))
+        self.assertEquals([entity.names for entity in
+                           ListModel.objects.filter(names__startswith='Sa')],
+                          [['Kakashi', 'Naruto', 'Sasuke',],
+                            ['Kakashi', 'Naruto', 'Sasuke', 'Sakura',]])
 
     def test_options(self):
         self.assertEqual([entity.names_with_default for entity in
@@ -87,51 +67,40 @@ class FilterTest(TestCase):
         self.assertEqual(ListModel().names_with_default, [])
 
     def test_ordering(self):
-        f = OrderedListModel._meta.fields[1]
-        f.ordering.calls = 0
-
-        # ensure no ordering happens on assignment
-        obj = OrderedListModel()
-        obj.ordered_ints = self.unordered_ints
-        self.assertEqual(f.ordering.calls, 0)
-
-        obj.save()
+        OrderedListModel(ordered_ints=self.unordered_ints).save()
         self.assertEqual(OrderedListModel.objects.get().ordered_ints,
                          sorted(self.unordered_ints))
-        # ordering should happen only once, i.e. the order function may be
-        # called N times at most (N being the number of items in the list)
-        self.assertLessEqual(f.ordering.calls, len(self.unordered_ints))
 
     def test_gt(self):
         # test gt on list
-        self.assertEquals(dict([(entity.pk, entity.names) for entity in
-                           ListModel.objects.filter(names__gt='Kakashi')]),
-                          dict([(2, [u'Kakashi', u'Naruto',]),
-                            (3, [u'Kakashi', u'Naruto', u'Sasuke',]),
-                            (4, [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]), ]))
+        self.assertEquals([entity.names for entity in
+                           ListModel.objects.filter(names__gt='Kakashi')],
+                          [[u'Kakashi', u'Naruto',],
+                            [u'Kakashi', u'Naruto', u'Sasuke',],
+                            [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]])
 
     def test_lt(self):
         # test lt on list
-        self.assertEquals(dict([(entity.pk, entity.names) for entity in
-                           ListModel.objects.filter(names__lt='Naruto')]),
-                          dict([(1, [u'Kakashi',]), (2, [u'Kakashi', u'Naruto',]),
-                            (3, [u'Kakashi', u'Naruto', u'Sasuke',]),
-                            (4, [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]), ]))
+        self.assertEquals([entity.names for entity in
+                           ListModel.objects.filter(names__lt='Naruto')],
+                          [[u'Kakashi',], [u'Kakashi', u'Naruto',],
+                            [u'Kakashi', u'Naruto', u'Sasuke',],
+                            [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]])
 
     def test_gte(self):
         # test gte on list
-        self.assertEquals(dict([(entity.pk, entity.names) for entity in
-                           ListModel.objects.filter(names__gte='Sakura')]),
-                          dict([(3, [u'Kakashi', u'Naruto', u'Sasuke',]),
-                            (4, [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]), ]))
+        self.assertEquals([entity.names for entity in
+                           ListModel.objects.filter(names__gte='Sakura')],
+                          [[u'Kakashi', u'Naruto', u'Sasuke',],
+                            [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]])
 
     def test_lte(self):
         # test lte on list
-        self.assertEquals(dict([(entity.pk, entity.names) for entity in
-                           ListModel.objects.filter(names__lte='Kakashi')]),
-                          dict([(1, [u'Kakashi',]), (2, [u'Kakashi', u'Naruto',]),
-                            (3, [u'Kakashi', u'Naruto', u'Sasuke',]),
-                            (4, [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]), ]))
+        self.assertEquals([entity.names for entity in
+                           ListModel.objects.filter(names__lte='Kakashi')],
+                          [[u'Kakashi',], [u'Kakashi', u'Naruto',],
+                            [u'Kakashi', u'Naruto', u'Sasuke',],
+                            [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]])
 
     def test_equals(self):
         # test equality filter on list
@@ -149,11 +118,11 @@ class FilterTest(TestCase):
             names__isnull=True).count(), 0)
 
     def test_exclude(self):
-        self.assertEquals(dict([(entity.pk, entity.names) for entity in
+        self.assertEquals([entity.names for entity in
                            ListModel.objects.all().exclude(
-                            names__lt='Sakura')]),
-                          dict([(3, [u'Kakashi', u'Naruto', u'Sasuke',]),
-                           (4, [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]), ]))
+                            names__lt='Sakura')],
+                          [[u'Kakashi', u'Naruto', u'Sasuke',],
+                           [u'Kakashi', u'Naruto', u'Sasuke', u'Sakura',]])
 
     def test_chained_filter(self):
         self.assertEquals([entity.names for entity in
@@ -235,13 +204,8 @@ class EmbeddedModelFieldTest(TestCase):
         self.assertIsInstance(instance.simple, EmbeddedModel)
         # Make sure get_prep_value is called:
         self.assertEqual(instance.simple.someint, 5)
-        # Primary keys should not be populated...
+        # AutoFields' values should not be populated:
         self.assertEqual(instance.simple.id, None)
-        # ... unless set explicitly.
-        instance.simple.id = instance.id
-        instance.save()
-        instance = EmbeddedModelFieldModel.objects.get()
-        self.assertEqual(instance.simple.id, instance.id)
 
     def test_pre_save(self):
         # Make sure field.pre_save is called
@@ -256,23 +220,11 @@ class EmbeddedModelFieldTest(TestCase):
         self.assertEqual(instance.simple.auto_now_add, auto_now_add)
         self.assertGreater(instance.simple.auto_now, auto_now)
 
-    def test_error_messages(self):
-        for kwargs in (
-            {'simple_untyped' : 42},
-            {'simple' : 42}
-        ):
-            self.assertRaisesRegexp(TypeError, "Expected instance of type",
-                                    EmbeddedModelFieldModel(**kwargs).save)
-
     def test_typed_listfield(self):
         EmbeddedModelFieldModel.objects.create(
-            typed_list=[SetModel(setfield=range(3)), SetModel(setfield=range(9))],
-            ordered_list=[Target(index=i) for i in xrange(5, 0, -1)]
+            typed_list=[SetModel(setfield=range(3)), SetModel(setfield=range(9))]
         )
-        obj = EmbeddedModelFieldModel.objects.get()
-        self.assertIn(5, obj.typed_list[1].setfield)
-        self.assertEqual([target.index for target in obj.ordered_list],
-                         range(1, 6))
+        self.assertIn(5, EmbeddedModelFieldModel.objects.get().typed_list[1].setfield)
 
     def test_untyped_listfield(self):
         EmbeddedModelFieldModel.objects.create(untyped_list=[
@@ -295,44 +247,6 @@ class EmbeddedModelFieldTest(TestCase):
         data = EmbeddedModelFieldModel.objects.get().untyped_dict
         self.assertIsInstance(data['a'], SetModel)
         self.assertNotEqual(data['c'].auto_now['y'], None)
-
-    def test_foreignkey_in_embedded_object(self):
-        simple = EmbeddedModel(some_relation=DictModel.objects.create())
-        obj = EmbeddedModelFieldModel.objects.create(simple=simple)
-        simple = EmbeddedModelFieldModel.objects.get().simple
-        self.assertNotIn('some_relation', simple.__dict__)
-        self.assertIsInstance(simple.__dict__['some_relation_id'], type(obj.id))
-        self.assertIsInstance(simple.some_relation, DictModel)
 EmbeddedModelFieldTest = unittest.skipIf(
     not supports_dicts, "Backend doesn't support dicts")(
     EmbeddedModelFieldTest)
-
-class SignalTest(TestCase):
-    def test_post_save(self):
-        created = []
-        @receiver(post_save, sender=SetModel)
-        def handle(**kwargs):
-            created.append(kwargs['created'])
-        SetModel().save()
-        self.assertEqual(created, [True])
-        SetModel.objects.get().save()
-        self.assertEqual(created, [True, False])
-        qs = SetModel.objects.all()
-        list(qs)[0].save()
-        self.assertEqual(created, [True, False, False])
-        list(qs)[0].save()
-        self.assertEqual(created, [True, False, False, False])
-        list(qs.select_related())[0].save()
-        self.assertEqual(created, [True, False, False, False, False])
-
-class SelectRelatedTest(TestCase):
-    def test_select_related(self):
-        target = Target(index=5)
-        target.save()
-        Source(target=target, index=8).save()
-        source = Source.objects.all().select_related()[0]
-        self.assertEqual(source.target.pk, target.pk)
-        self.assertEqual(source.target.index, target.index)
-        source = Source.objects.all().select_related('target')[0]
-        self.assertEqual(source.target.pk, target.pk)
-        self.assertEqual(source.target.index, target.index)

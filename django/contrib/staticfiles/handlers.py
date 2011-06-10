@@ -10,39 +10,46 @@ from django.contrib.staticfiles.views import serve
 class StaticFilesHandler(WSGIHandler):
     """
     WSGI middleware that intercepts calls to the static files directory, as
-    defined by the STATIC_URL setting, and serves those files.
+    defined by the STATICFILES_URL setting, and serves those files.
     """
-    def __init__(self, application, base_dir=None):
+    def __init__(self, application, media_dir=None):
         self.application = application
-        if base_dir:
-            self.base_dir = base_dir
+        if media_dir:
+            self.media_dir = media_dir
         else:
-            self.base_dir = self.get_base_dir()
-        self.base_url = urlparse(self.get_base_url())
+            self.media_dir = self.get_media_dir()
+        self.media_url = urlparse(self.get_media_url())
+        if settings.DEBUG:
+            utils.check_settings()
         super(StaticFilesHandler, self).__init__()
 
-    def get_base_dir(self):
-        return settings.STATIC_ROOT
+    def get_media_dir(self):
+        return settings.STATICFILES_ROOT
 
-    def get_base_url(self):
-        utils.check_settings()
-        return settings.STATIC_URL
+    def get_media_url(self):
+        return settings.STATICFILES_URL
 
     def _should_handle(self, path):
         """
         Checks if the path should be handled. Ignores the path if:
 
-        * the host is provided as part of the base_url
+        * the host is provided as part of the media_url
         * the request's path isn't under the media path (or equal)
+        * settings.DEBUG isn't True
         """
-        return (self.base_url[2] != path and
-            path.startswith(self.base_url[2]) and not self.base_url[1])
+        return (self.media_url[2] != path and
+            path.startswith(self.media_url[2]) and not self.media_url[1])
 
     def file_path(self, url):
         """
         Returns the relative path to the media file on disk for the given URL.
+
+        The passed URL is assumed to begin with ``media_url``.  If the
+        resultant file path is outside the media directory, then a ValueError
+        is raised.
         """
-        relative_url = url[len(self.base_url[2]):]
+        # Remove ``media_url``.
+        relative_url = url[len(self.media_url[2]):]
         return urllib.url2pathname(relative_url)
 
     def serve(self, request):

@@ -1,4 +1,5 @@
 """SMTP email backend class."""
+
 import smtplib
 import socket
 import threading
@@ -6,8 +7,6 @@ import threading
 from django.conf import settings
 from django.core.mail.backends.base import BaseEmailBackend
 from django.core.mail.utils import DNS_NAME
-from django.core.mail.message import sanitize_address
-
 
 class EmailBackend(BaseEmailBackend):
     """
@@ -96,11 +95,9 @@ class EmailBackend(BaseEmailBackend):
         """A helper method that does the actual sending."""
         if not email_message.recipients():
             return False
-        from_email = sanitize_address(email_message.from_email, email_message.encoding)
-        recipients = [sanitize_address(addr, email_message.encoding)
-                      for addr in email_message.recipients()]
         try:
-            self.connection.sendmail(from_email, recipients,
+            self.connection.sendmail(email_message.from_email,
+                    email_message.recipients(),
                     email_message.message().as_string())
         except:
             if not self.fail_silently:

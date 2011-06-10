@@ -4,7 +4,6 @@ Israeli-specific form helpers
 import re
 
 from django.core.exceptions import ValidationError
-from django.core.validators import EMPTY_VALUES
 from django.forms.fields import RegexField, Field, EMPTY_VALUES
 from django.utils.checksums import luhn
 from django.utils.translation import ugettext_lazy as _
@@ -35,7 +34,7 @@ class ILPostalCodeField(RegexField):
         super(ILPostalCodeField, self).__init__(r'^\d{5}$', *args, **kwargs)
 
     def clean(self, value):
-        if value not in EMPTY_VALUES:
+        if value is not None:
             value = value.replace(" ", "")
         return super(ILPostalCodeField, self).clean(value)
 

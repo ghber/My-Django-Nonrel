@@ -9,7 +9,6 @@ standard library.
 
 import re
 import sys
-import datetime
 
 from django.db import utils
 from django.db.backends import *
@@ -64,7 +63,6 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     test_db_allows_multiple_connections = False
     supports_unspecified_pk = True
     supports_1000_query_parameters = False
-    supports_mixed_date_datetime_comparisons = False
 
     def _supports_stddev(self):
         """Confirm support for STDDEV and related stats functions
@@ -91,16 +89,6 @@ class DatabaseOperations(BaseDatabaseOperations):
         # single quotes are used because this is a string (and could otherwise
         # cause a collision with a field name).
         return "django_extract('%s', %s)" % (lookup_type.lower(), field_name)
-
-    def date_interval_sql(self, sql, connector, timedelta):
-        # It would be more straightforward if we could use the sqlite strftime
-        # function, but it does not allow for keeping six digits of fractional
-        # second information, nor does it allow for formatting date and datetime
-        # values differently. So instead we register our own function that 
-        # formats the datetime combined with the delta in a manner suitable 
-        # for comparisons.
-        return  u'django_format_dtdelta(%s, "%s", "%d", "%d", "%d")' % (sql, 
-            connector, timedelta.days, timedelta.seconds, timedelta.microseconds)
 
     def date_trunc_sql(self, lookup_type, field_name):
         # sqlite doesn't support DATE_TRUNC, so we fake it with a user-defined
@@ -209,7 +197,6 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self.connection.create_function("django_extract", 2, _sqlite_extract)
             self.connection.create_function("django_date_trunc", 2, _sqlite_date_trunc)
             self.connection.create_function("regexp", 2, _sqlite_regexp)
-            self.connection.create_function("django_format_dtdelta", 5, _sqlite_format_dtdelta)
             connection_created.send(sender=self.__class__, connection=self)
         return self.connection.cursor(factory=SQLiteCursorWrapper)
 
@@ -218,7 +205,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         # database. To prevent accidental data loss, ignore close requests on
         # an in-memory db.
         if self.settings_dict['NAME'] != ":memory:":
-            super(DatabaseWrapper, self).close()
+            BaseDatabaseWrapper.close(self)
 
 FORMAT_QMARK_REGEX = re.compile(r'(?![^%])%s')
 
@@ -272,25 +259,6 @@ def _sqlite_date_trunc(lookup_type, dt):
         return "%i-%02i-01 00:00:00" % (dt.year, dt.month)
     elif lookup_type == 'day':
         return "%i-%02i-%02i 00:00:00" % (dt.year, dt.month, dt.day)
-
-def _sqlite_format_dtdelta(dt, conn, days, secs, usecs):
-    try:
-        dt = util.typecast_timestamp(dt)
-        delta = datetime.timedelta(int(days), int(secs), int(usecs))
-        if conn.strip() == '+':
-            dt = dt + delta
-        else:
-            dt = dt - delta
-    except (ValueError, TypeError):
-        return None
-
-    if isinstance(dt, datetime.datetime):
-        rv = dt.strftime("%Y-%m-%d %H:%M:%S")
-        if dt.microsecond:
-            rv = "%s.%0.6d" % (rv, dt.microsecond)
-    else:
-        rv = dt.strftime("%Y-%m-%d")
-    return rv
 
 def _sqlite_regexp(re_pattern, re_string):
     import re
